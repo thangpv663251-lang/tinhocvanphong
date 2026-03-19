@@ -16,23 +16,32 @@ export default function CameraMonitor({ onViolation, isMonitoring }: CameraMonit
   const videoRef = useRef<HTMLVideoElement>(null);
   const [violationCount, setViolationCount] = useState(0);
   const [isLoaded, setIsLoaded] = useState(false);
-  const [isFaceDetected, setIsFaceDetected] = useState(true);
+  const [faceError, setFaceError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!isMonitoring) return;
+
+    const loadModels = async () => {
+      try {
+        await window.faceapi.nets.tinyFaceDetector.loadFromUri('https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model/');
+        setIsLoaded(true);
+      } catch (error) {
+        console.error('Error loading face-api models:', error);
+      }
+    };
 
     const startCamera = async () => {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ video: true });
         if (videoRef.current) {
           videoRef.current.srcObject = stream;
-          setIsLoaded(true);
         }
       } catch (error) {
         console.error('Error accessing camera:', error);
       }
     };
 
+    loadModels();
     startCamera();
 
     const interval = setInterval(async () => {
@@ -43,15 +52,24 @@ export default function CameraMonitor({ onViolation, isMonitoring }: CameraMonit
         );
 
         if (detections.length === 0) {
-          setIsFaceDetected(false);
-          const newCount = violationCount + 1;
-          setViolationCount(newCount);
-          onViolation(newCount);
+          setFaceError('KHÔNG PHÁT HIỆN KHUÔN MẶT');
+          setViolationCount(prev => {
+            const next = prev + 1;
+            onViolation(next);
+            return next;
+          });
+        } else if (detections.length > 1) {
+          setFaceError('PHÁT HIỆN NHIỀU KHUÔN MẶT');
+          setViolationCount(prev => {
+            const next = prev + 1;
+            onViolation(next);
+            return next;
+          });
         } else {
-          setIsFaceDetected(true);
+          setFaceError(null);
         }
       }
-    }, 5000);
+    }, 2000); // Check every 2 seconds for better detection
 
     return () => {
       clearInterval(interval);
@@ -59,7 +77,7 @@ export default function CameraMonitor({ onViolation, isMonitoring }: CameraMonit
         (videoRef.current.srcObject as MediaStream).getTracks().forEach(track => track.stop());
       }
     };
-  }, [isMonitoring, isLoaded, violationCount]);
+  }, [isMonitoring, isLoaded, onViolation]);
 
   if (!isMonitoring) return null;
 
@@ -72,16 +90,17 @@ export default function CameraMonitor({ onViolation, isMonitoring }: CameraMonit
           muted 
           className="w-full h-full object-cover scale-x-[-1]"
         />
-        {!isFaceDetected && (
-          <div className="absolute inset-0 bg-red-500/40 flex items-center justify-center backdrop-blur-sm">
-            <ShieldAlert className="w-12 h-12 text-white animate-pulse" />
+        {faceError && (
+          <div className="absolute inset-0 bg-red-500/60 flex flex-col items-center justify-center backdrop-blur-sm p-4 text-center">
+            <ShieldAlert className="w-10 h-10 text-white animate-pulse mb-2" />
+            <span className="text-[10px] font-black text-white uppercase leading-tight">{faceError}</span>
           </div>
         )}
       </div>
       
       <div className="p-3 flex items-center justify-between bg-white">
         <div className="flex items-center gap-2">
-          <div className={`w-2 h-2 rounded-full ${isFaceDetected ? 'bg-emerald-500' : 'bg-red-500 animate-ping'}`} />
+          <div className={`w-2 h-2 rounded-full ${!faceError ? 'bg-emerald-500' : 'bg-red-500 animate-ping'}`} />
           <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">AI Monitoring</span>
         </div>
         {violationCount > 0 && (

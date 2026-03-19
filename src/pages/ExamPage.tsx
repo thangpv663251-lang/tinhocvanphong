@@ -43,6 +43,7 @@ export default function ExamPage({ sbd }: { sbd: string }) {
   const [violations, setViolations] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [flagged, setFlagged] = useState<Record<number, boolean>>({});
 
   useEffect(() => {
     if (mode === 'quiz') {
@@ -211,8 +212,23 @@ export default function ExamPage({ sbd }: { sbd: string }) {
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
         {mode === 'quiz' ? (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-12">
-            <div className="lg:col-span-2">
+          <div className="grid grid-cols-1 lg:grid-cols-4 gap-12">
+            <div className="lg:col-span-3 space-y-8">
+              {/* Progress Bar */}
+              <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">Tiến độ làm bài</span>
+                  <span className="text-xs font-bold text-indigo-600">{Object.keys(userAns).length} / {questions.length} câu</span>
+                </div>
+                <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
+                  <motion.div 
+                    initial={{ width: 0 }}
+                    animate={{ width: `${(Object.keys(userAns).length / questions.length) * 100}%` }}
+                    className="h-full bg-indigo-600"
+                  />
+                </div>
+              </div>
+
               <AnimatePresence mode="wait">
                 {questions[qIdx] && (
                   <motion.div
@@ -220,74 +236,182 @@ export default function ExamPage({ sbd }: { sbd: string }) {
                     initial={{ opacity: 0, x: 20 }}
                     animate={{ opacity: 1, x: 0 }}
                     exit={{ opacity: 0, x: -20 }}
-                    className="bg-white p-12 rounded-3xl shadow-sm border border-slate-200"
+                    className="bg-white p-12 rounded-[40px] shadow-sm border border-slate-200 min-h-[500px] flex flex-col"
                   >
-                    <p className="text-xs font-bold text-indigo-600 uppercase tracking-widest mb-4">Câu hỏi {qIdx + 1}</p>
-                    <h3 className="text-2xl font-bold text-slate-900 mb-12 leading-relaxed">{questions[qIdx].q}</h3>
+                    <div className="flex items-center justify-between mb-8">
+                      <div className="flex items-center gap-3">
+                        <span className="px-4 py-1.5 bg-indigo-50 text-indigo-600 rounded-full text-xs font-bold uppercase tracking-widest">
+                          Câu hỏi {qIdx + 1}
+                        </span>
+                        <span className="text-slate-300">/</span>
+                        <span className="text-slate-400 text-xs font-bold uppercase tracking-widest">
+                          {questions.length} Câu
+                        </span>
+                      </div>
+                      <button 
+                        onClick={() => setFlagged({ ...flagged, [questions[qIdx].id]: !flagged[questions[qIdx].id] })}
+                        className={`flex items-center gap-2 px-4 py-2 rounded-xl font-bold text-xs transition-all ${flagged[questions[qIdx].id] ? 'bg-orange-50 text-orange-600' : 'text-slate-400 hover:bg-slate-50'}`}
+                      >
+                        <AlertCircle className="w-4 h-4" />
+                        {flagged[questions[qIdx].id] ? 'ĐÃ ĐÁNH DẤU' : 'ĐÁNH DẤU CÂU HỎI'}
+                      </button>
+                    </div>
+
+                    <h3 className="text-3xl font-bold text-slate-900 mb-12 leading-tight">
+                      {questions[qIdx].q}
+                    </h3>
                     
-                    <div className="space-y-4">
-                      {questions[qIdx].opts.map((opt, i) => (
-                        <button
-                          key={i}
-                          onClick={() => setUserAns({ ...userAns, [questions[qIdx].id]: opt })}
-                          className={`w-full p-6 rounded-2xl border-2 text-left transition-all flex items-center justify-between group ${userAns[questions[qIdx].id] === opt ? 'border-indigo-600 bg-indigo-50/50' : 'border-slate-100 hover:border-indigo-200 hover:bg-slate-50'}`}
-                        >
-                          <span className={`text-lg font-medium ${userAns[questions[qIdx].id] === opt ? 'text-indigo-900' : 'text-slate-600'}`}>
-                            {opt}
-                          </span>
-                          <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all ${userAns[questions[qIdx].id] === opt ? 'border-indigo-600 bg-indigo-600' : 'border-slate-200 group-hover:border-indigo-300'}`}>
-                            {userAns[questions[qIdx].id] === opt && <CheckCircle2 className="w-4 h-4 text-white" />}
-                          </div>
-                        </button>
-                      ))}
+                    <div className="space-y-4 mt-auto">
+                      {questions[qIdx].opts.map((opt, i) => {
+                        const isSelected = userAns[questions[qIdx].id] === opt;
+                        const label = String.fromCharCode(65 + i); // A, B, C...
+                        
+                        return (
+                          <button
+                            key={i}
+                            onClick={() => setUserAns({ ...userAns, [questions[qIdx].id]: opt })}
+                            className={`w-full p-6 rounded-2xl border-2 text-left transition-all flex items-center gap-6 group relative overflow-hidden ${isSelected ? 'border-indigo-600 bg-indigo-50/30' : 'border-slate-100 hover:border-indigo-200 hover:bg-slate-50'}`}
+                          >
+                            <div className={`w-10 h-10 rounded-xl border-2 flex items-center justify-center font-bold transition-all ${isSelected ? 'border-indigo-600 bg-indigo-600 text-white' : 'border-slate-200 text-slate-400 group-hover:border-indigo-300 group-hover:text-indigo-600'}`}>
+                              {label}
+                            </div>
+                            <span className={`text-lg font-semibold flex-1 ${isSelected ? 'text-indigo-900' : 'text-slate-600'}`}>
+                              {opt}
+                            </span>
+                            {isSelected && (
+                              <motion.div 
+                                layoutId="active-indicator"
+                                className="absolute right-6"
+                              >
+                                <CheckCircle2 className="w-6 h-6 text-indigo-600" />
+                              </motion.div>
+                            )}
+                          </button>
+                        );
+                      })}
                     </div>
                   </motion.div>
                 )}
               </AnimatePresence>
 
-              <div className="flex items-center justify-between mt-8">
+              <div className="flex items-center justify-between">
                 <button 
                   onClick={() => setQIdx(prev => Math.max(0, prev - 1))}
                   disabled={qIdx === 0}
-                  className="p-4 text-slate-400 hover:text-slate-900 hover:bg-white rounded-2xl transition-all disabled:opacity-20"
+                  className="flex items-center gap-3 px-8 py-4 bg-white border border-slate-200 text-slate-600 font-bold rounded-2xl hover:bg-slate-50 transition-all disabled:opacity-20 shadow-sm"
                 >
-                  <ChevronLeft className="w-8 h-8" />
+                  <ChevronLeft className="w-6 h-6" />
+                  CÂU TRƯỚC
                 </button>
-                <div className="text-slate-400 font-bold text-sm uppercase tracking-widest">
-                  {qIdx + 1} / {questions.length}
+                
+                <div className="flex gap-2">
+                  {qIdx === questions.length - 1 ? (
+                    <button 
+                      onClick={() => handleSubmit()}
+                      className="flex items-center gap-3 px-10 py-4 bg-emerald-600 text-white font-bold rounded-2xl hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-100"
+                    >
+                      HOÀN THÀNH
+                      <Send className="w-6 h-6" />
+                    </button>
+                  ) : (
+                    <button 
+                      onClick={() => setQIdx(prev => Math.min(questions.length - 1, prev + 1))}
+                      className="flex items-center gap-3 px-10 py-4 bg-indigo-600 text-white font-bold rounded-2xl hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100"
+                    >
+                      CÂU TIẾP THEO
+                      <ChevronRight className="w-6 h-6" />
+                    </button>
+                  )}
                 </div>
-                <button 
-                  onClick={() => setQIdx(prev => Math.min(questions.length - 1, prev + 1))}
-                  disabled={qIdx === questions.length - 1}
-                  className="p-4 text-slate-400 hover:text-slate-900 hover:bg-white rounded-2xl transition-all disabled:opacity-20"
-                >
-                  <ChevronRight className="w-8 h-8" />
-                </button>
               </div>
             </div>
 
-            <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-200 h-fit sticky top-32">
-              <h4 className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-6">Bản đồ câu hỏi</h4>
-              <div className="grid grid-cols-5 gap-3">
-                {questions.map((q, i) => (
-                  <button
-                    key={q.id}
-                    onClick={() => setQIdx(i)}
-                    className={`aspect-square rounded-xl font-bold transition-all flex items-center justify-center ${qIdx === i ? 'ring-2 ring-indigo-600 ring-offset-2' : ''} ${userAns[q.id] ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-400 hover:bg-slate-200'}`}
+            <div className="space-y-8">
+              <div className="bg-white p-8 rounded-[32px] shadow-sm border border-slate-200 h-fit sticky top-32">
+                <div className="flex items-center justify-between mb-8">
+                  <h4 className="text-sm font-bold text-slate-400 uppercase tracking-widest">Bản đồ câu hỏi</h4>
+                  <div className="flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Live</span>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-4 sm:grid-cols-5 gap-3">
+                  {questions.map((q, i) => {
+                    const isCurrent = qIdx === i;
+                    const isAnswered = !!userAns[q.id];
+                    const isFlagged = flagged[q.id];
+                    
+                    return (
+                      <button
+                        key={q.id}
+                        onClick={() => setQIdx(i)}
+                        className={`aspect-square rounded-xl font-bold text-sm transition-all flex items-center justify-center relative ${isCurrent ? 'ring-2 ring-indigo-600 ring-offset-2 scale-110 z-10' : ''} ${isAnswered ? 'bg-indigo-600 text-white shadow-md shadow-indigo-100' : 'bg-slate-50 text-slate-400 hover:bg-slate-100'}`}
+                      >
+                        {i + 1}
+                        {isAnswered && !isCurrent && (
+                          <div className="absolute -top-1 -right-1 w-3 h-3 bg-emerald-500 rounded-full border-2 border-white" />
+                        )}
+                        {isFlagged && (
+                          <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-orange-500 rounded-full border-2 border-white flex items-center justify-center">
+                            <AlertCircle className="w-2 h-2 text-white" />
+                          </div>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+                
+                <div className="mt-12 space-y-4 pt-8 border-t border-slate-100">
+                  <div className="flex items-center justify-between text-xs font-bold uppercase tracking-widest">
+                    <span className="text-slate-400">Đã trả lời</span>
+                    <span className="text-indigo-600">{Object.keys(userAns).length}</span>
+                  </div>
+                  <div className="flex items-center justify-between text-xs font-bold uppercase tracking-widest">
+                    <span className="text-slate-400">Chưa trả lời</span>
+                    <span className="text-slate-600">{questions.length - Object.keys(userAns).length}</span>
+                  </div>
+                  <div className="flex items-center justify-between text-xs font-bold uppercase tracking-widest">
+                    <span className="text-slate-400">Đã đánh dấu</span>
+                    <span className="text-orange-600">{Object.keys(flagged).filter(k => flagged[Number(k)]).length}</span>
+                  </div>
+                </div>
+
+                <div className="mt-8 p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                  <h5 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Hướng dẫn</h5>
+                  <ul className="text-[10px] text-slate-500 space-y-1 list-disc pl-3">
+                    <li>Chọn đáp án và nhấn "Câu tiếp theo"</li>
+                    <li>Sử dụng "Đánh dấu" cho các câu chưa chắc chắn</li>
+                    <li>Hệ thống tự động nộp bài khi hết giờ</li>
+                  </ul>
+                </div>
+
+                <div className="mt-8 pt-8 border-t border-slate-100">
+                  <button 
+                    onClick={() => handleSubmit('canceled')}
+                    className="w-full py-4 text-red-500 font-bold text-xs uppercase tracking-widest hover:bg-red-50 rounded-2xl transition-all flex items-center justify-center gap-2"
                   >
-                    {i + 1}
+                    <XCircle className="w-5 h-5" />
+                    Hủy bài thi
                   </button>
-                ))}
+                </div>
               </div>
-              
-              <div className="mt-8 pt-8 border-t border-slate-100">
-                <button 
-                  onClick={() => handleSubmit('canceled')}
-                  className="w-full py-4 text-red-500 font-bold text-sm uppercase tracking-widest hover:bg-red-50 rounded-xl transition-all flex items-center justify-center gap-2"
-                >
-                  <XCircle className="w-5 h-5" />
-                  Hủy bài thi
-                </button>
+
+              {/* AI Status Card */}
+              <div className="bg-indigo-900 p-8 rounded-[32px] text-white shadow-xl shadow-indigo-100">
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="p-2 bg-white/10 rounded-lg">
+                    <Camera className="w-5 h-5" />
+                  </div>
+                  <h4 className="text-sm font-bold uppercase tracking-widest">AI Monitoring</h4>
+                </div>
+                <p className="text-indigo-200 text-sm leading-relaxed mb-6">
+                  Hệ thống đang giám sát vị trí của bạn. Vui lòng không rời khỏi khung hình hoặc quay mặt đi quá lâu.
+                </p>
+                <div className="flex items-center justify-between p-4 bg-white/5 rounded-2xl border border-white/10">
+                  <span className="text-xs font-bold uppercase tracking-widest text-indigo-300">Số lần vi phạm</span>
+                  <span className={`text-xl font-black ${violations > 0 ? 'text-red-400' : 'text-white'}`}>{violations} / 3</span>
+                </div>
               </div>
             </div>
           </div>

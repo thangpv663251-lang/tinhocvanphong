@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Users, 
   ListTodo, 
@@ -77,6 +77,41 @@ export default function AdminPage() {
       body: JSON.stringify({ id, score })
     });
     fetchData();
+  };
+
+  const [isAddingQuiz, setIsAddingQuiz] = useState(false);
+  const [newQuiz, setNewQuiz] = useState({
+    subject: 'Word',
+    question: '',
+    opt_a: '',
+    opt_b: '',
+    opt_c: '',
+    answer: ''
+  });
+
+  const handleAddQuiz = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const res = await fetch('/api/admin/add_quiz', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newQuiz)
+      });
+      if (res.ok) {
+        setIsAddingQuiz(false);
+        setNewQuiz({
+          subject: 'Word',
+          question: '',
+          opt_a: '',
+          opt_b: '',
+          opt_c: '',
+          answer: ''
+        });
+        fetchData();
+      }
+    } catch (error) {
+      console.error('Error adding quiz:', error);
+    }
   };
 
   return (
@@ -211,7 +246,10 @@ export default function AdminPage() {
             >
               <div className="flex items-center justify-between mb-12">
                 <h2 className="text-4xl font-black text-slate-900 tracking-tight">Ngân hàng câu hỏi</h2>
-                <button className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-6 py-3 rounded-xl shadow-lg shadow-indigo-100 transition-all flex items-center gap-2">
+                <button 
+                  onClick={() => setIsAddingQuiz(true)}
+                  className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-6 py-3 rounded-xl shadow-lg shadow-indigo-100 transition-all flex items-center gap-2"
+                >
                   <Plus className="w-5 h-5" />
                   THÊM CÂU HỎI
                 </button>
@@ -267,6 +305,101 @@ export default function AdminPage() {
                 <PracConfigCard subject="PowerPoint" icon={Presentation} color="orange" />
               </div>
             </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Add Quiz Modal */}
+        <AnimatePresence>
+          {isAddingQuiz && (
+            <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+              <motion.div 
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.95 }}
+                className="bg-white rounded-[32px] shadow-2xl w-full max-w-2xl overflow-hidden"
+              >
+                <div className="p-8 border-b border-slate-100 flex items-center justify-between">
+                  <h3 className="text-2xl font-black text-slate-900 tracking-tight">Thêm câu hỏi mới</h3>
+                  <button onClick={() => setIsAddingQuiz(false)} className="text-slate-400 hover:text-slate-900 transition-colors">
+                    <XCircle className="w-8 h-8" />
+                  </button>
+                </div>
+                <form onSubmit={handleAddQuiz} className="p-8 space-y-6">
+                  <div className="grid grid-cols-2 gap-6">
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Môn thi</label>
+                      <select 
+                        value={newQuiz.subject}
+                        onChange={(e) => setNewQuiz({ ...newQuiz, subject: e.target.value })}
+                        className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+                      >
+                        <option value="Word">Word</option>
+                        <option value="Excel">Excel</option>
+                        <option value="PowerPoint">PowerPoint</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Đáp án đúng (Gõ nội dung chuẩn)</label>
+                      <input 
+                        type="text" 
+                        required
+                        value={newQuiz.answer}
+                        onChange={(e) => setNewQuiz({ ...newQuiz, answer: e.target.value })}
+                        className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Câu hỏi</label>
+                    <textarea 
+                      required
+                      rows={3}
+                      value={newQuiz.question}
+                      onChange={(e) => setNewQuiz({ ...newQuiz, question: e.target.value })}
+                      className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none resize-none"
+                    />
+                  </div>
+                  <div className="grid grid-cols-3 gap-6">
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Lựa chọn A</label>
+                      <input 
+                        type="text" 
+                        required
+                        value={newQuiz.opt_a}
+                        onChange={(e) => setNewQuiz({ ...newQuiz, opt_a: e.target.value })}
+                        className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Lựa chọn B</label>
+                      <input 
+                        type="text" 
+                        required
+                        value={newQuiz.opt_b}
+                        onChange={(e) => setNewQuiz({ ...newQuiz, opt_b: e.target.value })}
+                        className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Lựa chọn C</label>
+                      <input 
+                        type="text" 
+                        required
+                        value={newQuiz.opt_c}
+                        onChange={(e) => setNewQuiz({ ...newQuiz, opt_c: e.target.value })}
+                        className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+                      />
+                    </div>
+                  </div>
+                  <button 
+                    type="submit"
+                    className="w-full py-4 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl shadow-lg shadow-indigo-100 transition-all"
+                  >
+                    LƯU CÂU HỎI
+                  </button>
+                </form>
+              </motion.div>
+            </div>
           )}
         </AnimatePresence>
       </main>
