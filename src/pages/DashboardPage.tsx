@@ -14,14 +14,25 @@ interface SubjectStatus {
   prac_file: string;
 }
 
+interface Student {
+  sbd: string;
+  fullname: string;
+  dob: string;
+  pob: string;
+  course: string;
+  phone: string;
+}
+
 export default function DashboardPage({ sbd, onLogout }: DashboardPageProps) {
   const navigate = useNavigate();
   const [status, setStatus] = useState<Record<string, SubjectStatus>>({});
+  const [student, setStudent] = useState<Student | null>(null);
   const [loading, setLoading] = useState(true);
   const [showProfile, setShowProfile] = useState(false);
 
   useEffect(() => {
     fetchStatus();
+    fetchStudent();
   }, [sbd]);
 
   const fetchStatus = async () => {
@@ -37,6 +48,16 @@ export default function DashboardPage({ sbd, onLogout }: DashboardPageProps) {
       console.error('Error fetching status:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchStudent = async () => {
+    try {
+      const response = await fetch(`/api/student/${sbd}`);
+      const data = await response.json();
+      setStudent(data);
+    } catch (error) {
+      console.error('Error fetching student:', error);
     }
   };
 
@@ -157,11 +178,11 @@ export default function DashboardPage({ sbd, onLogout }: DashboardPageProps) {
               <div className="p-8 border-b border-slate-100 flex items-center justify-between">
                 <div className="flex items-center gap-4">
                   <div className="p-3 bg-indigo-100 rounded-2xl">
-                    <Trophy className="w-8 h-8 text-indigo-600" />
+                    <User className="w-8 h-8 text-indigo-600" />
                   </div>
                   <div>
-                    <h3 className="text-2xl font-black text-slate-900 tracking-tight">Kết quả học tập</h3>
-                    <p className="text-sm text-slate-400 font-bold uppercase tracking-widest">Thí sinh: {sbd}</p>
+                    <h3 className="text-2xl font-black text-slate-900 tracking-tight">Thông tin thí sinh</h3>
+                    <p className="text-sm text-slate-400 font-bold uppercase tracking-widest">SBD: {sbd}</p>
                   </div>
                 </div>
                 <button onClick={() => setShowProfile(false)} className="text-slate-400 hover:text-slate-900 transition-colors">
@@ -169,37 +190,52 @@ export default function DashboardPage({ sbd, onLogout }: DashboardPageProps) {
                 </button>
               </div>
               
-              <div className="p-8 space-y-6">
-                <div className="bg-slate-50 rounded-2xl overflow-hidden border border-slate-100">
-                  <table className="w-full text-left border-collapse">
-                    <thead>
-                      <tr className="border-b border-slate-200">
-                        <th className="px-6 py-4 text-xs font-bold text-slate-400 uppercase tracking-widest">Môn thi</th>
-                        <th className="px-6 py-4 text-xs font-bold text-slate-400 uppercase tracking-widest">Trắc nghiệm</th>
-                        <th className="px-6 py-4 text-xs font-bold text-slate-400 uppercase tracking-widest">Tự luận</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {subjects.map(sub => {
-                        const subStatus = status[sub.id] || { quiz: '', prac: '', prac_file: '' };
-                        return (
-                          <tr key={sub.id}>
-                            <td className="px-6 py-4 font-bold text-slate-900">{sub.id}</td>
-                            <td className="px-6 py-4">
-                              <span className={`font-mono font-bold ${subStatus.quiz === 'HỦY/VI PHẠM' ? 'text-red-500' : 'text-indigo-600'}`}>
-                                {subStatus.quiz || '-'}
-                              </span>
-                            </td>
-                            <td className="px-6 py-4">
-                              <span className="font-mono font-bold text-emerald-600">
-                                {subStatus.prac || 'Chưa chấm'}
-                              </span>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
+              <div className="p-8 space-y-8 max-h-[70vh] overflow-y-auto">
+                {/* Personal Info */}
+                <div className="grid grid-cols-2 gap-6">
+                  <InfoField label="Họ và tên" value={student?.fullname} />
+                  <InfoField label="Số điện thoại" value={student?.phone} />
+                  <InfoField label="Ngày sinh" value={student?.dob} />
+                  <InfoField label="Nơi sinh" value={student?.pob} />
+                  <InfoField label="Khóa học" value={student?.course} />
+                </div>
+
+                <div className="h-px bg-slate-100" />
+
+                {/* Scores */}
+                <div>
+                  <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">Kết quả thi</h4>
+                  <div className="bg-slate-50 rounded-2xl overflow-hidden border border-slate-100">
+                    <table className="w-full text-left border-collapse">
+                      <thead>
+                        <tr className="border-b border-slate-200">
+                          <th className="px-6 py-4 text-xs font-bold text-slate-400 uppercase tracking-widest">Môn thi</th>
+                          <th className="px-6 py-4 text-xs font-bold text-slate-400 uppercase tracking-widest">Trắc nghiệm</th>
+                          <th className="px-6 py-4 text-xs font-bold text-slate-400 uppercase tracking-widest">Tự luận</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {subjects.map(sub => {
+                          const subStatus = status[sub.id] || { quiz: '', prac: '', prac_file: '' };
+                          return (
+                            <tr key={sub.id}>
+                              <td className="px-6 py-4 font-bold text-slate-900">{sub.id}</td>
+                              <td className="px-6 py-4">
+                                <span className={`font-mono font-bold ${subStatus.quiz === 'HỦY/VI PHẠM' ? 'text-red-500' : 'text-indigo-600'}`}>
+                                  {subStatus.quiz || '-'}
+                                </span>
+                              </td>
+                              <td className="px-6 py-4">
+                                <span className="font-mono font-bold text-emerald-600">
+                                  {subStatus.prac || 'Chưa chấm'}
+                                </span>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
                 
                 <div className="p-6 bg-indigo-50 rounded-2xl border border-indigo-100">
@@ -224,6 +260,15 @@ export default function DashboardPage({ sbd, onLogout }: DashboardPageProps) {
           </div>
         )}
       </AnimatePresence>
+    </div>
+  );
+}
+
+function InfoField({ label, value }: { label: string; value?: string }) {
+  return (
+    <div>
+      <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">{label}</p>
+      <p className="text-slate-900 font-bold">{value || 'N/A'}</p>
     </div>
   );
 }

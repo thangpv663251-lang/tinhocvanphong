@@ -37,10 +37,20 @@ interface QuizQuestion {
   answer: string;
 }
 
+interface Student {
+  sbd: string;
+  fullname: string;
+  dob: string;
+  pob: string;
+  course: string;
+  phone: string;
+}
+
 export default function AdminPage() {
-  const [activeTab, setActiveTab] = useState<'results' | 'quiz' | 'prac'>('results');
+  const [activeTab, setActiveTab] = useState<'results' | 'quiz' | 'prac' | 'students'>('results');
   const [results, setResults] = useState<Result[]>([]);
   const [quizzes, setQuizzes] = useState<QuizQuestion[]>([]);
+  const [students, setStudents] = useState<Student[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -56,12 +66,48 @@ export default function AdminPage() {
       } else if (activeTab === 'quiz') {
         const res = await fetch('/api/admin/get_all_quizzes');
         setQuizzes(await res.json());
+      } else if (activeTab === 'students') {
+        const res = await fetch('/api/admin/students');
+        setStudents(await res.json());
       }
     } catch (error) {
       console.error('Error fetching data:', error);
     } finally {
       setLoading(false);
     }
+  };
+
+  const [isAddingStudent, setIsAddingStudent] = useState(false);
+  const [newStudent, setNewStudent] = useState({
+    fullname: '',
+    dob: '',
+    pob: '',
+    course: 'Cơ bản',
+    phone: ''
+  });
+
+  const handleAddStudent = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const res = await fetch('/api/admin/add_student', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newStudent)
+      });
+      if (res.ok) {
+        setIsAddingStudent(false);
+        setNewStudent({ fullname: '', dob: '', pob: '', course: 'Cơ bản', phone: '' });
+        fetchData();
+      }
+    } catch (error) {
+      console.error('Error adding student:', error);
+    }
+  };
+
+  const handleDeleteStudent = async (sbd: string) => {
+    if (!confirm('Xóa thí sinh này?')) return;
+    await fetch(`/api/admin/del_student/${sbd}`, { method: 'DELETE' });
+    fetchData();
   };
 
   const handleDeleteResult = async (id: number) => {
@@ -134,6 +180,12 @@ export default function AdminPage() {
             onClick={() => setActiveTab('results')}
             icon={Users}
             label="Kết quả thí sinh"
+          />
+          <NavButton 
+            active={activeTab === 'students'} 
+            onClick={() => setActiveTab('students')}
+            icon={Users}
+            label="Quản lý thí sinh"
           />
           <NavButton 
             active={activeTab === 'quiz'} 
@@ -237,6 +289,64 @@ export default function AdminPage() {
             </motion.div>
           )}
 
+          {activeTab === 'students' && (
+            <motion.div
+              key="students"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+            >
+              <div className="flex items-center justify-between mb-12">
+                <h2 className="text-4xl font-black text-slate-900 tracking-tight">Quản lý thí sinh</h2>
+                <button 
+                  onClick={() => setIsAddingStudent(true)}
+                  className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-6 py-3 rounded-xl shadow-lg shadow-indigo-100 transition-all flex items-center gap-2"
+                >
+                  <Plus className="w-5 h-5" />
+                  THÊM THÍ SINH
+                </button>
+              </div>
+
+              <div className="bg-white rounded-[32px] shadow-sm border border-slate-200 overflow-hidden">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="bg-slate-50 border-b border-slate-100">
+                      <th className="px-8 py-6 text-xs font-bold text-slate-400 uppercase tracking-widest">SBD (SĐT)</th>
+                      <th className="px-8 py-6 text-xs font-bold text-slate-400 uppercase tracking-widest">Họ tên</th>
+                      <th className="px-8 py-6 text-xs font-bold text-slate-400 uppercase tracking-widest">Ngày sinh</th>
+                      <th className="px-8 py-6 text-xs font-bold text-slate-400 uppercase tracking-widest">Nơi sinh</th>
+                      <th className="px-8 py-6 text-xs font-bold text-slate-400 uppercase tracking-widest">Khóa học</th>
+                      <th className="px-8 py-6 text-xs font-bold text-slate-400 uppercase tracking-widest">Thao tác</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-50">
+                    {students.map((std) => (
+                      <tr key={std.sbd} className="hover:bg-slate-50/50 transition-colors">
+                        <td className="px-8 py-6 font-mono font-bold text-indigo-600">{std.sbd}</td>
+                        <td className="px-8 py-6 font-bold text-slate-900">{std.fullname}</td>
+                        <td className="px-8 py-6 text-slate-500">{std.dob}</td>
+                        <td className="px-8 py-6 text-slate-500">{std.pob}</td>
+                        <td className="px-8 py-6">
+                          <span className="px-3 py-1 bg-indigo-50 text-indigo-600 rounded-full text-xs font-bold">
+                            {std.course}
+                          </span>
+                        </td>
+                        <td className="px-8 py-6">
+                          <button 
+                            onClick={() => handleDeleteStudent(std.sbd)}
+                            className="p-2 text-slate-300 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
+                          >
+                            <Trash2 className="w-5 h-5" />
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </motion.div>
+          )}
+
           {activeTab === 'quiz' && (
             <motion.div
               key="quiz"
@@ -305,6 +415,90 @@ export default function AdminPage() {
                 <PracConfigCard subject="PowerPoint" icon={Presentation} color="orange" />
               </div>
             </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Add Student Modal */}
+        <AnimatePresence>
+          {isAddingStudent && (
+            <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+              <motion.div 
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.95 }}
+                className="bg-white rounded-[32px] shadow-2xl w-full max-w-2xl overflow-hidden"
+              >
+                <div className="p-8 border-b border-slate-100 flex items-center justify-between">
+                  <h3 className="text-2xl font-black text-slate-900 tracking-tight">Thêm thí sinh mới</h3>
+                  <button onClick={() => setIsAddingStudent(false)} className="text-slate-400 hover:text-slate-900 transition-colors">
+                    <XCircle className="w-8 h-8" />
+                  </button>
+                </div>
+                <form onSubmit={handleAddStudent} className="p-8 space-y-6">
+                  <div className="grid grid-cols-2 gap-6">
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Họ và tên</label>
+                      <input 
+                        type="text" 
+                        required
+                        value={newStudent.fullname}
+                        onChange={(e) => setNewStudent({ ...newStudent, fullname: e.target.value })}
+                        className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Số điện thoại (SBD)</label>
+                      <input 
+                        type="text" 
+                        required
+                        value={newStudent.phone}
+                        onChange={(e) => setNewStudent({ ...newStudent, phone: e.target.value })}
+                        className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+                      />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-6">
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Ngày sinh</label>
+                      <input 
+                        type="date" 
+                        required
+                        value={newStudent.dob}
+                        onChange={(e) => setNewStudent({ ...newStudent, dob: e.target.value })}
+                        className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Nơi sinh</label>
+                      <input 
+                        type="text" 
+                        required
+                        value={newStudent.pob}
+                        onChange={(e) => setNewStudent({ ...newStudent, pob: e.target.value })}
+                        className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Khóa học</label>
+                    <select 
+                      value={newStudent.course}
+                      onChange={(e) => setNewStudent({ ...newStudent, course: e.target.value })}
+                      className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+                    >
+                      <option value="Cơ bản">Khóa cơ bản</option>
+                      <option value="Cơ bản đến nâng cao">Khóa cơ bản đến nâng cao</option>
+                    </select>
+                  </div>
+                  <button 
+                    type="submit"
+                    className="w-full py-4 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl shadow-lg shadow-indigo-100 transition-all"
+                  >
+                    LƯU THÍ SINH
+                  </button>
+                </form>
+              </motion.div>
+            </div>
           )}
         </AnimatePresence>
 

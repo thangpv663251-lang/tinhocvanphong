@@ -44,16 +44,32 @@ export default function ExamPage({ sbd }: { sbd: string }) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [flagged, setFlagged] = useState<Record<number, boolean>>({});
+  const [showConfirm, setShowConfirm] = useState<{ type: 'submit' | 'cancel', mode: 'quiz' | 'prac' } | null>(null);
+  const [examStatus, setExamStatus] = useState<Record<string, any>>({});
+
+  useEffect(() => {
+    fetchStatus();
+  }, [sbd]);
 
   useEffect(() => {
     if (mode === 'quiz') {
+      if (examStatus[subject || '']?.quiz) {
+        alert('Bạn đã hoàn thành phần thi trắc nghiệm này!');
+        setMode('selection');
+        return;
+      }
       fetchQuestions();
       setTimeLeft(15 * 60); // 15 minutes
     } else if (mode === 'prac') {
+      if (examStatus[subject || '']?.prac_file) {
+        alert('Bạn đã hoàn thành phần thi tự luận này!');
+        setMode('selection');
+        return;
+      }
       fetchPracContent();
       setTimeLeft(45 * 60); // 45 minutes
     }
-  }, [mode, subject]);
+  }, [mode, subject, examStatus]);
 
   useEffect(() => {
     if (timeLeft <= 0 || mode === 'selection') return;
@@ -62,7 +78,7 @@ export default function ExamPage({ sbd }: { sbd: string }) {
       setTimeLeft(prev => {
         if (prev <= 1) {
           clearInterval(timer);
-          handleSubmit();
+          handleSubmit(mode, 'timeout');
           return 0;
         }
         return prev - 1;
@@ -71,6 +87,20 @@ export default function ExamPage({ sbd }: { sbd: string }) {
 
     return () => clearInterval(timer);
   }, [timeLeft, mode]);
+
+  const fetchStatus = async () => {
+    try {
+      const res = await fetch('/api/get_status', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sbd })
+      });
+      const data = await res.json();
+      setExamStatus(data);
+    } catch (error) {
+      console.error('Error fetching status:', error);
+    }
+  };
 
   const fetchQuestions = async () => {
     try {
@@ -93,6 +123,15 @@ export default function ExamPage({ sbd }: { sbd: string }) {
   };
 
   const handleStart = (newMode: 'quiz' | 'prac') => {
+    const currentSub = subject || '';
+    if (newMode === 'quiz' && examStatus[currentSub]?.quiz) {
+      alert('Bạn đã hoàn thành phần thi trắc nghiệm này!');
+      return;
+    }
+    if (newMode === 'prac' && examStatus[currentSub]?.prac_file) {
+      alert('Bạn đã hoàn thành phần thi tự luận này!');
+      return;
+    }
     setMode(newMode);
     setIsMonitoring(true);
   };
@@ -100,18 +139,18 @@ export default function ExamPage({ sbd }: { sbd: string }) {
   const handleViolation = (count: number) => {
     setViolations(count);
     if (count >= 3) {
-      alert('BẠN ĐÃ VI PHẠM 3 LẦN. BÀI THI SẼ BỊ ĐÌNH CHỈ.');
-      handleSubmit('violated');
+      handleSubmit(mode, 'violated');
     }
   };
 
-  const handleSubmit = async (status?: string) => {
+  const handleSubmit = async (submitMode: 'quiz' | 'prac', status?: string) => {
     if (isSubmitting) return;
     setIsSubmitting(true);
     setIsMonitoring(false);
+    setShowConfirm(null);
 
     try {
-      if (mode === 'quiz') {
+      if (submitMode === 'quiz') {
         const res = await fetch('/api/submit_quiz', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -120,25 +159,41 @@ export default function ExamPage({ sbd }: { sbd: string }) {
             subject,
             answers: userAns,
             violations,
-            status: status === 'violated' ? 'canceled' : undefined
+            status: status === 'violated' || status === 'canceled' ? 'canceled' : 'completed'
           })
         });
         const data = await res.json();
-        alert(`Nộp bài thành công! Điểm trắc nghiệm: ${data.score}`);
-      } else if (mode === 'prac') {
+        if (status === 'violated') {
+          alert('BẠN ĐÃ VI PHẠM 3 LẦN. BÀI THI ĐÃ BỊ ĐÌNH CHỈ.');
+        } else if (status === 'canceled') {
+          alert('Đã hủy bài thi trắc nghiệm.');
+        } else {
+          alert(`Nộp bài thành công! Điểm trắc nghiệm: ${data.score}`);
+        }
+      } else if (submitMode === 'prac') {
         const formData = new FormData();
         formData.append('sbd', sbd);
         formData.append('subject', subject || '');
+        formData.append('status', status || 'completed');
         if (uploadFile) formData.append('file', uploadFile);
-        if (status === 'canceled') formData.append('status', 'canceled');
 
-        await fetch('/api/submit_practical', {
+        const res = await fetch('/api/submit_practical', {
           method: 'POST',
           body: formData
         });
-        alert('Đã nộp bài tự luận thành công!');
+        const data = await res.json();
+        if (data.status === 'success') {
+          if (status === 'canceled') {
+            alert('Đã hủy bài thi tự luận.');
+          } else {
+            alert('Đã nộp bài tự luận thành công!');
+          }
+        } else {
+          throw new Error('Server error');
+        }
       }
-      navigate('/dashboard');
+      await fetchStatus();
+      setMode('selection');
     } catch (error) {
       console.error('Error submitting:', error);
       alert('Có lỗi xảy ra khi nộp bài. Vui lòng thử lại.');
@@ -184,28 +239,43 @@ export default function ExamPage({ sbd }: { sbd: string }) {
 
   return (
     <div className="min-h-screen bg-slate-50">
-      <header className="bg-white border-b border-slate-200 sticky top-0 z-10">
+      <header className="bg-white border-b border-slate-200 sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
           <div className="flex items-center gap-4">
             <div className="p-2 bg-indigo-600 rounded-lg">
               <ShieldCheck className="w-6 h-6 text-white" />
             </div>
-            <h1 className="text-xl font-bold text-slate-900 uppercase">{subject} - {mode === 'quiz' ? 'Trắc nghiệm' : 'Tự luận'}</h1>
+            <div className="flex flex-col">
+              <h1 className="text-xl font-bold text-slate-900 uppercase leading-none">{subject}</h1>
+              <span className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1">
+                {mode === 'quiz' ? 'Phần thi Trắc nghiệm' : 'Phần thi Tự luận'}
+              </span>
+            </div>
           </div>
           
-          <div className="flex items-center gap-8">
-            <div className={`flex items-center gap-3 px-6 py-2 rounded-full font-mono font-bold text-2xl ${timeLeft < 60 ? 'bg-red-50 text-red-600 animate-pulse' : 'bg-slate-50 text-slate-900'}`}>
+          <div className="flex items-center gap-6">
+            <div className={`flex items-center gap-3 px-6 py-2.5 rounded-2xl font-mono font-bold text-2xl border-2 ${timeLeft < 60 ? 'bg-red-50 border-red-200 text-red-600 animate-pulse' : 'bg-slate-50 border-slate-100 text-slate-900'}`}>
               <Clock className="w-6 h-6" />
               {formatTime(timeLeft)}
             </div>
-            <button 
-              onClick={() => handleSubmit()}
-              disabled={isSubmitting}
-              className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-8 py-3 rounded-xl shadow-lg shadow-emerald-100 transition-all flex items-center gap-2"
-            >
-              <Send className="w-5 h-5" />
-              NỘP BÀI
-            </button>
+            <div className="flex items-center gap-3">
+              <button 
+                onClick={() => setShowConfirm('cancel')}
+                disabled={isSubmitting}
+                className="bg-white hover:bg-slate-50 text-slate-600 font-bold px-6 py-3 rounded-xl border border-slate-200 transition-all flex items-center gap-2"
+              >
+                <XCircle className="w-5 h-5" />
+                HỦY THI
+              </button>
+              <button 
+                onClick={() => setShowConfirm('submit')}
+                disabled={isSubmitting}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-8 py-3 rounded-xl shadow-lg shadow-emerald-100 transition-all flex items-center gap-2"
+              >
+                <Send className="w-5 h-5" />
+                NỘP BÀI
+              </button>
+            </div>
           </div>
         </div>
       </header>
@@ -307,7 +377,7 @@ export default function ExamPage({ sbd }: { sbd: string }) {
                 <div className="flex gap-2">
                   {qIdx === questions.length - 1 ? (
                     <button 
-                      onClick={() => handleSubmit()}
+                      onClick={() => setShowConfirm({ type: 'submit', mode: 'quiz' })}
                       className="flex items-center gap-3 px-10 py-4 bg-emerald-600 text-white font-bold rounded-2xl hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-100"
                     >
                       HOÀN THÀNH
@@ -388,7 +458,7 @@ export default function ExamPage({ sbd }: { sbd: string }) {
 
                 <div className="mt-8 pt-8 border-t border-slate-100">
                   <button 
-                    onClick={() => handleSubmit('canceled')}
+                    onClick={() => setShowConfirm({ type: 'cancel', mode: 'quiz' })}
                     className="w-full py-4 text-red-500 font-bold text-xs uppercase tracking-widest hover:bg-red-50 rounded-2xl transition-all flex items-center justify-center gap-2"
                   >
                     <XCircle className="w-5 h-5" />
@@ -469,7 +539,7 @@ export default function ExamPage({ sbd }: { sbd: string }) {
                   </div>
                   
                   <button 
-                    onClick={() => handleSubmit()}
+                    onClick={() => setShowConfirm({ type: 'submit', mode: 'prac' })}
                     disabled={!uploadFile || isSubmitting}
                     className="w-full py-4 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl shadow-lg shadow-emerald-100 transition-all disabled:opacity-20 disabled:shadow-none"
                   >
@@ -479,7 +549,7 @@ export default function ExamPage({ sbd }: { sbd: string }) {
               </div>
 
               <button 
-                onClick={() => handleSubmit('canceled')}
+                onClick={() => setShowConfirm({ type: 'cancel', mode: 'prac' })}
                 className="w-full py-4 text-red-500 font-bold text-sm uppercase tracking-widest hover:bg-red-50 rounded-xl transition-all flex items-center justify-center gap-2"
               >
                 <XCircle className="w-5 h-5" />
@@ -491,6 +561,47 @@ export default function ExamPage({ sbd }: { sbd: string }) {
       </main>
 
       <CameraMonitor onViolation={handleViolation} isMonitoring={isMonitoring} />
+
+      <AnimatePresence>
+        {showConfirm && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              className="bg-white rounded-[32px] p-8 max-w-md w-full shadow-2xl border border-slate-100"
+            >
+              <div className={`w-16 h-16 rounded-2xl flex items-center justify-center mb-6 ${showConfirm.type === 'submit' ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600'}`}>
+                {showConfirm.type === 'submit' ? <Send className="w-8 h-8" /> : <AlertCircle className="w-8 h-8" />}
+              </div>
+              
+              <h3 className="text-2xl font-bold text-slate-900 mb-2">
+                {showConfirm.type === 'submit' ? 'Xác nhận nộp bài?' : 'Xác nhận hủy bài?'}
+              </h3>
+              <p className="text-slate-500 mb-8 leading-relaxed">
+                {showConfirm.type === 'submit' 
+                  ? 'Bạn có chắc chắn muốn kết thúc bài thi và nộp kết quả ngay bây giờ không?' 
+                  : 'Hành động này sẽ hủy bỏ toàn bộ kết quả bài thi hiện tại và không thể hoàn tác. Bạn có chắc chắn muốn tiếp tục?'}
+              </p>
+
+              <div className="flex gap-4">
+                <button
+                  onClick={() => setShowConfirm(null)}
+                  className="flex-1 py-4 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold rounded-2xl transition-all"
+                >
+                  QUAY LẠI
+                </button>
+                <button
+                  onClick={() => handleSubmit(showConfirm.mode, showConfirm.type === 'cancel' ? 'canceled' : undefined)}
+                  className={`flex-1 py-4 text-white font-bold rounded-2xl transition-all shadow-lg ${showConfirm.type === 'submit' ? 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-100' : 'bg-red-600 hover:bg-red-700 shadow-red-100'}`}
+                >
+                  XÁC NHẬN
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
