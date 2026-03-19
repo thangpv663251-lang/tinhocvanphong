@@ -1,0 +1,383 @@
+import { useState, useEffect } from 'react';
+import { 
+  Users, 
+  ListTodo, 
+  Settings, 
+  Trash2, 
+  Download, 
+  Plus, 
+  Save, 
+  CheckCircle2, 
+  XCircle,
+  AlertTriangle,
+  FileText,
+  Layout,
+  Presentation
+} from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
+
+interface Result {
+  id: number;
+  sbd: string;
+  subject: string;
+  quiz_score: string;
+  prac_score: string;
+  prac_file: string;
+  time_submit: string;
+  violations: number;
+}
+
+interface QuizQuestion {
+  id: number;
+  subject: string;
+  question: string;
+  opt_a: string;
+  opt_b: string;
+  opt_c: string;
+  answer: string;
+}
+
+export default function AdminPage() {
+  const [activeTab, setActiveTab] = useState<'results' | 'quiz' | 'prac'>('results');
+  const [results, setResults] = useState<Result[]>([]);
+  const [quizzes, setQuizzes] = useState<QuizQuestion[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchData();
+  }, [activeTab]);
+
+  const fetchData = async () => {
+    setLoading(true);
+    try {
+      if (activeTab === 'results') {
+        const res = await fetch('/api/admin/results');
+        setResults(await res.json());
+      } else if (activeTab === 'quiz') {
+        const res = await fetch('/api/admin/get_all_quizzes');
+        setQuizzes(await res.json());
+      }
+    } catch (error) {
+      console.error('Error fetching data:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDeleteResult = async (id: number) => {
+    if (!confirm('Xác nhận xóa kết quả này?')) return;
+    await fetch(`/api/admin/delete_result/${id}`, { method: 'DELETE' });
+    fetchData();
+  };
+
+  const handleUpdateScore = async (id: number, score: string) => {
+    await fetch('/api/admin/update_score', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, score })
+    });
+    fetchData();
+  };
+
+  return (
+    <div className="min-h-screen bg-slate-50 flex">
+      {/* Sidebar */}
+      <aside className="w-80 bg-white border-r border-slate-200 flex flex-col sticky top-0 h-screen">
+        <div className="p-8 border-b border-slate-100">
+          <div className="flex items-center gap-3 mb-2">
+            <div className="p-2 bg-indigo-600 rounded-lg">
+              <Settings className="w-6 h-6 text-white" />
+            </div>
+            <h1 className="text-xl font-black text-slate-900 tracking-tight">ADMIN PANEL</h1>
+          </div>
+          <p className="text-xs text-slate-400 font-bold uppercase tracking-widest">Hệ thống quản trị</p>
+        </div>
+
+        <nav className="flex-1 p-6 space-y-2">
+          <NavButton 
+            active={activeTab === 'results'} 
+            onClick={() => setActiveTab('results')}
+            icon={Users}
+            label="Kết quả thí sinh"
+          />
+          <NavButton 
+            active={activeTab === 'quiz'} 
+            onClick={() => setActiveTab('quiz')}
+            icon={ListTodo}
+            label="Ngân hàng câu hỏi"
+          />
+          <NavButton 
+            active={activeTab === 'prac'} 
+            onClick={() => setActiveTab('prac')}
+            icon={FileText}
+            label="Cấu hình tự luận"
+          />
+        </nav>
+
+        <div className="p-8 border-t border-slate-100">
+          <div className="bg-slate-50 p-4 rounded-2xl text-center">
+            <p className="text-xs text-slate-400 font-bold uppercase tracking-widest mb-1">Tổng thí sinh</p>
+            <p className="text-2xl font-black text-slate-900">{results.length}</p>
+          </div>
+        </div>
+      </aside>
+
+      {/* Main Content */}
+      <main className="flex-1 p-12 overflow-y-auto">
+        <AnimatePresence mode="wait">
+          {activeTab === 'results' && (
+            <motion.div
+              key="results"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+            >
+              <div className="flex items-center justify-between mb-12">
+                <h2 className="text-4xl font-black text-slate-900 tracking-tight">Kết quả thí sinh</h2>
+                <button className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-6 py-3 rounded-xl shadow-lg shadow-emerald-100 transition-all flex items-center gap-2">
+                  <Download className="w-5 h-5" />
+                  XUẤT BÁO CÁO
+                </button>
+              </div>
+
+              <div className="bg-white rounded-[32px] shadow-sm border border-slate-200 overflow-hidden">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="bg-slate-50 border-b border-slate-100">
+                      <th className="px-8 py-6 text-xs font-bold text-slate-400 uppercase tracking-widest">SBD</th>
+                      <th className="px-8 py-6 text-xs font-bold text-slate-400 uppercase tracking-widest">Môn thi</th>
+                      <th className="px-8 py-6 text-xs font-bold text-slate-400 uppercase tracking-widest">Trắc nghiệm</th>
+                      <th className="px-8 py-6 text-xs font-bold text-slate-400 uppercase tracking-widest">Tự luận</th>
+                      <th className="px-8 py-6 text-xs font-bold text-slate-400 uppercase tracking-widest">Vi phạm</th>
+                      <th className="px-8 py-6 text-xs font-bold text-slate-400 uppercase tracking-widest">Thao tác</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-50">
+                    {results.map((res) => (
+                      <tr key={res.id} className="hover:bg-slate-50/50 transition-colors">
+                        <td className="px-8 py-6 font-mono font-bold text-indigo-600">{res.sbd}</td>
+                        <td className="px-8 py-6 font-bold text-slate-900">{res.subject}</td>
+                        <td className="px-8 py-6">
+                          <span className={`px-3 py-1 rounded-full text-xs font-bold ${res.quiz_score === 'HỦY/VI PHẠM' ? 'bg-red-100 text-red-600' : 'bg-indigo-100 text-indigo-600'}`}>
+                            {res.quiz_score || '-'}
+                          </span>
+                        </td>
+                        <td className="px-8 py-6">
+                          <div className="flex items-center gap-4">
+                            <input 
+                              type="text" 
+                              defaultValue={res.prac_score}
+                              onBlur={(e) => handleUpdateScore(res.id, e.target.value)}
+                              className="w-16 px-2 py-1 border border-slate-200 rounded-lg text-center font-bold text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+                            />
+                            {res.prac_file && res.prac_file !== 'HỦY BỎ' && (
+                              <a 
+                                href={`/api/download/${res.prac_file}`}
+                                className="text-indigo-600 hover:text-indigo-800 font-bold text-xs uppercase tracking-widest"
+                              >
+                                Tải bài
+                              </a>
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-8 py-6">
+                          <div className="flex items-center gap-2">
+                            <AlertTriangle className={`w-4 h-4 ${res.violations > 0 ? 'text-red-500' : 'text-slate-200'}`} />
+                            <span className={`font-bold ${res.violations > 0 ? 'text-red-600' : 'text-slate-400'}`}>{res.violations}</span>
+                          </div>
+                        </td>
+                        <td className="px-8 py-6">
+                          <button 
+                            onClick={() => handleDeleteResult(res.id)}
+                            className="p-2 text-slate-300 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
+                          >
+                            <Trash2 className="w-5 h-5" />
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </motion.div>
+          )}
+
+          {activeTab === 'quiz' && (
+            <motion.div
+              key="quiz"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+            >
+              <div className="flex items-center justify-between mb-12">
+                <h2 className="text-4xl font-black text-slate-900 tracking-tight">Ngân hàng câu hỏi</h2>
+                <button className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-6 py-3 rounded-xl shadow-lg shadow-indigo-100 transition-all flex items-center gap-2">
+                  <Plus className="w-5 h-5" />
+                  THÊM CÂU HỎI
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 gap-6">
+                {quizzes.map((q) => (
+                  <div key={q.id} className="bg-white p-8 rounded-3xl shadow-sm border border-slate-200 flex items-start justify-between group">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-3 mb-4">
+                        <span className="px-3 py-1 bg-slate-100 text-slate-500 rounded-full text-[10px] font-bold uppercase tracking-widest">
+                          {q.subject}
+                        </span>
+                        <span className="text-xs font-bold text-emerald-600 uppercase tracking-widest">
+                          Đáp án: {q.answer}
+                        </span>
+                      </div>
+                      <h3 className="text-xl font-bold text-slate-900 mb-4">{q.question}</h3>
+                      <div className="grid grid-cols-3 gap-4">
+                        <Option label="A" value={q.opt_a} />
+                        <Option label="B" value={q.opt_b} />
+                        <Option label="C" value={q.opt_c} />
+                      </div>
+                    </div>
+                    <button 
+                      onClick={async () => {
+                        if (confirm('Xóa câu hỏi này?')) {
+                          await fetch(`/api/admin/del_quiz/${q.id}`, { method: 'DELETE' });
+                          fetchData();
+                        }
+                      }}
+                      className="p-3 text-slate-200 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all opacity-0 group-hover:opacity-100"
+                    >
+                      <Trash2 className="w-6 h-6" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </motion.div>
+          )}
+
+          {activeTab === 'prac' && (
+            <motion.div
+              key="prac"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+            >
+              <h2 className="text-4xl font-black text-slate-900 tracking-tight mb-12">Cấu hình tự luận</h2>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                <PracConfigCard subject="Word" icon={FileText} color="blue" />
+                <PracConfigCard subject="Excel" icon={Layout} color="emerald" />
+                <PracConfigCard subject="PowerPoint" icon={Presentation} color="orange" />
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </main>
+    </div>
+  );
+}
+
+function NavButton({ active, onClick, icon: Icon, label }: { active: boolean, onClick: () => void, icon: any, label: string }) {
+  return (
+    <button
+      onClick={onClick}
+      className={`w-full flex items-center gap-4 px-6 py-4 rounded-2xl font-bold transition-all ${active ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-100' : 'text-slate-400 hover:bg-slate-50 hover:text-slate-600'}`}
+    >
+      <Icon className="w-6 h-6" />
+      {label}
+    </button>
+  );
+}
+
+function Option({ label, value }: { label: string, value: string }) {
+  return (
+    <div className="flex items-center gap-2 text-sm">
+      <span className="w-6 h-6 bg-slate-50 text-slate-400 rounded-lg flex items-center justify-center font-bold">{label}</span>
+      <span className="text-slate-600 truncate">{value}</span>
+    </div>
+  );
+}
+
+function PracConfigCard({ subject, icon: Icon, color }: { subject: string, icon: any, color: string }) {
+  const [title, setTitle] = useState('');
+  const [content, setContent] = useState('');
+  const [point, setPoint] = useState(0.5);
+  const [file, setFile] = useState<File | null>(null);
+
+  useEffect(() => {
+    fetch(`/api/get_prac_content/${subject}`)
+      .then(res => res.json())
+      .then(data => {
+        setTitle(data.title);
+        setContent(data.content);
+      });
+  }, [subject]);
+
+  const handleSave = async () => {
+    await fetch('/api/admin/update_prac', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ subject, title, content, quiz_point: point })
+    });
+
+    if (file) {
+      const formData = new FormData();
+      formData.append('subject', subject);
+      formData.append('file', file);
+      await fetch('/api/admin/upload_prac_task', {
+        method: 'POST',
+        body: formData
+      });
+    }
+    alert(`Đã lưu cấu hình ${subject}`);
+  };
+
+  const colors: any = {
+    blue: 'text-blue-600 bg-blue-50',
+    emerald: 'text-emerald-600 bg-emerald-50',
+    orange: 'text-orange-600 bg-orange-50'
+  };
+
+  return (
+    <div className="bg-white p-8 rounded-[32px] shadow-sm border border-slate-200 flex flex-col">
+      <div className={`w-12 h-12 rounded-2xl flex items-center justify-center mb-6 ${colors[color]}`}>
+        <Icon className="w-6 h-6" />
+      </div>
+      <h3 className="text-xl font-bold text-slate-900 mb-6">{subject}</h3>
+      
+      <div className="space-y-4 flex-1">
+        <div>
+          <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Tiêu đề</label>
+          <input 
+            type="text" 
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+          />
+        </div>
+        <div>
+          <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Nội dung đề bài</label>
+          <textarea 
+            rows={4}
+            value={content}
+            onChange={(e) => setContent(e.target.value)}
+            className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none resize-none"
+          />
+        </div>
+        <div>
+          <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">File đề thi (.pdf)</label>
+          <input 
+            type="file" 
+            onChange={(e) => setFile(e.target.files?.[0] || null)}
+            className="w-full text-xs text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100"
+          />
+        </div>
+      </div>
+
+      <button 
+        onClick={handleSave}
+        className="mt-8 w-full py-4 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl shadow-lg shadow-indigo-100 transition-all flex items-center justify-center gap-2"
+      >
+        <Save className="w-5 h-5" />
+        LƯU CẤU HÌNH
+      </button>
+    </div>
+  );
+}
