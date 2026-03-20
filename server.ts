@@ -77,7 +77,10 @@ const storage = multer.diskStorage({
   }
 });
 
-const upload = multer({ storage });
+const upload = multer({ 
+  storage,
+  limits: { fileSize: 50 * 1024 * 1024 } // 50MB limit
+});
 
 const pracStorage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, PRAC_FILES),
@@ -118,7 +121,9 @@ async function startServer() {
   // API Routes
   app.post('/api/get_status', (req, res) => {
     const { sbd } = req.body;
-    db.all("SELECT subject, quiz_score, prac_score, prac_file FROM results WHERE sbd = ?", [sbd.toUpperCase()], (err, rows) => {
+    if (!sbd) return res.json({});
+    const sbdUpper = String(sbd).toUpperCase().trim();
+    db.all("SELECT subject, quiz_score, prac_score, prac_file FROM results WHERE sbd = ?", [sbdUpper], (err, rows) => {
       if (err) return res.status(500).json({ error: err.message });
       const status: any = {};
       rows.forEach((r: any) => {
@@ -187,35 +192,42 @@ async function startServer() {
 
   app.post('/api/submit_practical', upload.single('file'), (req, res) => {
     const { sbd, subject, status } = req.body;
-    const sbdUpper = sbd?.toUpperCase() || 'UNKNOWN';
-    let fname = status === 'canceled' ? "HỦY BỎ" : "KHÔNG CÓ FILE";
+    const sbdUpper = sbd ? String(sbd).toUpperCase().trim() : 'UNKNOWN';
+    const sub = subject || 'unknown';
+    const stat = status || 'completed';
     
-    if (status !== 'canceled' && (req as any).file) {
+    console.log(`[Practical Submission] SBD: ${sbdUpper}, Subject: ${sub}, Status: ${stat}`);
+    
+    let fname = stat === 'canceled' ? "HỦY BỎ" : "KHÔNG CÓ FILE";
+    
+    if (stat !== 'canceled' && (req as any).file) {
       fname = (req as any).file.filename;
+      console.log(`[Practical Submission] File saved: ${fname}`);
+    } else if (stat !== 'canceled') {
+      console.log(`[Practical Submission] No file received for ${sbdUpper}`);
     }
 
-    console.log(`Submitting practical for ${sbdUpper} - ${subject} - Status: ${status} - File: ${fname}`);
+    const timeNow = new Date().toLocaleString('vi-VN');
 
-    db.get("SELECT id FROM results WHERE sbd = ? AND subject = ?", [sbdUpper, subject], (err, row: any) => {
+    db.get("SELECT id FROM results WHERE sbd = ? AND subject = ?", [sbdUpper, sub], (err, row: any) => {
       if (err) {
-        console.error("Database error (get):", err.message);
+        console.error("[Practical Submission] DB Get Error:", err.message);
         return res.status(500).json({ error: err.message });
       }
       
-      const timeNow = new Date().toLocaleString('vi-VN');
       if (row) {
         db.run("UPDATE results SET prac_file = ?, time_submit = ? WHERE id = ?", [fname, timeNow, row.id], (err) => {
           if (err) {
-            console.error("Database error (update):", err.message);
+            console.error("[Practical Submission] DB Update Error:", err.message);
             return res.status(500).json({ error: err.message });
           }
           res.json({ status: "success", filename: fname });
         });
       } else {
         db.run("INSERT INTO results (sbd, subject, quiz_score, prac_score, prac_file, time_submit) VALUES (?,?,?,?,?,?)",
-          [sbdUpper, subject, "", "", fname, timeNow], (err) => {
+          [sbdUpper, sub, "", "", fname, timeNow], (err) => {
             if (err) {
-              console.error("Database error (insert):", err.message);
+              console.error("[Practical Submission] DB Insert Error:", err.message);
               return res.status(500).json({ error: err.message });
             }
             res.json({ status: "success", filename: fname });
@@ -312,6 +324,21 @@ async function startServer() {
   app.delete('/api/admin/delete_result/:id', (req, res) => {
     db.run("DELETE FROM results WHERE id = ?", [req.params.id], (err) => {
       if (err) return res.status(500).json({ error: err.message });
+      res.json({ status: "success" });
+    });
+  });
+
+  app.post('/api/admin/reset_results', (req, res) => {
+    db.run("DELETE FROM results", (err) => {
+      if (err) return res.status(500).json({ error: err.message });
+      res.json({ status: "success" });
+    });
+  });
+
+  app.post('/api/admin/reset_all', (req, res) => {
+    db.serialize(() => {
+      db.run("DELETE FROM results");
+      db.run("DELETE FROM students");
       res.json({ status: "success" });
     });
   });

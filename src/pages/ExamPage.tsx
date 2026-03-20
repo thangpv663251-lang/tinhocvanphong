@@ -145,9 +145,19 @@ export default function ExamPage({ sbd }: { sbd: string }) {
 
   const handleSubmit = async (submitMode: 'quiz' | 'prac', status?: string) => {
     if (isSubmitting) return;
-    setIsSubmitting(true);
-    setIsMonitoring(false);
-    setShowConfirm(null);
+    
+    console.log(`Submitting ${submitMode} with status: ${status || 'completed'}`);
+
+    // If canceling, we want to exit immediately even if the server call is slow
+    if (status === 'canceled') {
+      setIsMonitoring(false);
+      setShowConfirm(null);
+      setMode('selection');
+    } else {
+      setIsSubmitting(true);
+      setIsMonitoring(false);
+      setShowConfirm(null);
+    }
 
     try {
       if (submitMode === 'quiz') {
@@ -166,7 +176,7 @@ export default function ExamPage({ sbd }: { sbd: string }) {
         if (status === 'violated') {
           alert('BẠN ĐÃ VI PHẠM 3 LẦN. BÀI THI ĐÃ BỊ ĐÌNH CHỈ.');
         } else if (status === 'canceled') {
-          alert('Đã hủy bài thi trắc nghiệm.');
+          console.log('Đã ghi nhận hủy bài thi trắc nghiệm trên server.');
         } else {
           alert(`Nộp bài thành công! Điểm trắc nghiệm: ${data.score}`);
         }
@@ -175,7 +185,10 @@ export default function ExamPage({ sbd }: { sbd: string }) {
         formData.append('sbd', sbd);
         formData.append('subject', subject || '');
         formData.append('status', status || 'completed');
-        if (uploadFile) formData.append('file', uploadFile);
+        if (uploadFile) {
+          console.log(`Uploading file: ${uploadFile.name}, size: ${uploadFile.size}`);
+          formData.append('file', uploadFile);
+        }
 
         const res = await fetch('/api/submit_practical', {
           method: 'POST',
@@ -184,19 +197,23 @@ export default function ExamPage({ sbd }: { sbd: string }) {
         const data = await res.json();
         if (data.status === 'success') {
           if (status === 'canceled') {
-            alert('Đã hủy bài thi tự luận.');
+            console.log('Đã ghi nhận hủy bài thi tự luận trên server.');
           } else {
             alert('Đã nộp bài tự luận thành công!');
           }
         } else {
-          throw new Error('Server error');
+          throw new Error(data.error || 'Server error');
         }
       }
-      await fetchStatus();
+      
+      // Always refresh status and go back to selection
       setMode('selection');
+      await fetchStatus();
     } catch (error) {
       console.error('Error submitting:', error);
-      alert('Có lỗi xảy ra khi nộp bài. Vui lòng thử lại.');
+      if (status !== 'canceled') {
+        alert('Có lỗi xảy ra khi nộp bài. Vui lòng thử lại.');
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -260,7 +277,7 @@ export default function ExamPage({ sbd }: { sbd: string }) {
             </div>
             <div className="flex items-center gap-3">
               <button 
-                onClick={() => setShowConfirm('cancel')}
+                onClick={() => setShowConfirm({ type: 'cancel', mode })}
                 disabled={isSubmitting}
                 className="bg-white hover:bg-slate-50 text-slate-600 font-bold px-6 py-3 rounded-xl border border-slate-200 transition-all flex items-center gap-2"
               >
@@ -268,7 +285,7 @@ export default function ExamPage({ sbd }: { sbd: string }) {
                 HỦY THI
               </button>
               <button 
-                onClick={() => setShowConfirm('submit')}
+                onClick={() => setShowConfirm({ type: 'submit', mode })}
                 disabled={isSubmitting}
                 className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-8 py-3 rounded-xl shadow-lg shadow-emerald-100 transition-all flex items-center gap-2"
               >

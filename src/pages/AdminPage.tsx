@@ -47,7 +47,7 @@ interface Student {
 }
 
 export default function AdminPage() {
-  const [activeTab, setActiveTab] = useState<'results' | 'quiz' | 'prac' | 'students'>('results');
+  const [activeTab, setActiveTab] = useState<'results' | 'quiz' | 'prac' | 'students' | 'settings'>('results');
   const [results, setResults] = useState<Result[]>([]);
   const [quizzes, setQuizzes] = useState<QuizQuestion[]>([]);
   const [students, setStudents] = useState<Student[]>([]);
@@ -75,6 +75,20 @@ export default function AdminPage() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleResetResults = async () => {
+    if (!confirm('CẢNH BÁO: Xóa TOÀN BỘ kết quả thi? Hành động này không thể hoàn tác.')) return;
+    await fetch('/api/admin/reset_results', { method: 'POST' });
+    fetchData();
+    alert('Đã xóa sạch kết quả thi.');
+  };
+
+  const handleResetAll = async () => {
+    if (!confirm('CẢNH BÁO NGUY HIỂM: Xóa TOÀN BỘ thí sinh và kết quả?')) return;
+    await fetch('/api/admin/reset_all', { method: 'POST' });
+    fetchData();
+    alert('Hệ thống đã được làm mới hoàn toàn.');
   };
 
   const [isAddingStudent, setIsAddingStudent] = useState(false);
@@ -198,6 +212,12 @@ export default function AdminPage() {
             onClick={() => setActiveTab('prac')}
             icon={FileText}
             label="Cấu hình tự luận"
+          />
+          <NavButton 
+            active={activeTab === 'settings'} 
+            onClick={() => setActiveTab('settings')}
+            icon={Settings}
+            label="Cài đặt hệ thống"
           />
         </nav>
 
@@ -413,6 +433,54 @@ export default function AdminPage() {
                 <PracConfigCard subject="Word" icon={FileText} color="blue" />
                 <PracConfigCard subject="Excel" icon={Layout} color="emerald" />
                 <PracConfigCard subject="PowerPoint" icon={Presentation} color="orange" />
+              </div>
+            </motion.div>
+          )}
+
+          {activeTab === 'settings' && (
+            <motion.div
+              key="settings"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+            >
+              <h2 className="text-4xl font-black text-slate-900 tracking-tight mb-12">Cài đặt hệ thống</h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <div className="bg-white p-8 rounded-[32px] shadow-sm border border-slate-200">
+                  <div className="flex items-center gap-4 mb-6">
+                    <div className="p-3 bg-orange-50 rounded-2xl">
+                      <AlertTriangle className="w-8 h-8 text-orange-600" />
+                    </div>
+                    <div>
+                      <h3 className="text-xl font-bold text-slate-900">Xóa kết quả thi</h3>
+                      <p className="text-sm text-slate-400">Xóa toàn bộ điểm số và file bài làm của thí sinh.</p>
+                    </div>
+                  </div>
+                  <button 
+                    onClick={handleResetResults}
+                    className="w-full py-4 bg-orange-50 text-orange-600 hover:bg-orange-600 hover:text-white font-bold rounded-xl transition-all"
+                  >
+                    LÀM MỚI KẾT QUẢ
+                  </button>
+                </div>
+
+                <div className="bg-white p-8 rounded-[32px] shadow-sm border border-slate-200">
+                  <div className="flex items-center gap-4 mb-6">
+                    <div className="p-3 bg-red-50 rounded-2xl">
+                      <Trash2 className="w-8 h-8 text-red-600" />
+                    </div>
+                    <div>
+                      <h3 className="text-xl font-bold text-slate-900">Xóa toàn bộ hệ thống</h3>
+                      <p className="text-sm text-slate-400">Xóa sạch thí sinh và kết quả (Dùng cho kỳ thi mới).</p>
+                    </div>
+                  </div>
+                  <button 
+                    onClick={handleResetAll}
+                    className="w-full py-4 bg-red-50 text-red-600 hover:bg-red-600 hover:text-white font-bold rounded-xl transition-all"
+                  >
+                    RESET TOÀN BỘ
+                  </button>
+                </div>
               </div>
             </motion.div>
           )}

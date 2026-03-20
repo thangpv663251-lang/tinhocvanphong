@@ -119,8 +119,10 @@ export default function DashboardPage({ sbd, onLogout }: DashboardPageProps) {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
           {subjects.map((sub, index) => {
             const subStatus = status[sub.id] || { quiz: '', prac: '', prac_file: '' };
-            const isCompleted = subStatus.quiz && subStatus.prac_file;
-            const isViolated = subStatus.quiz === 'HỦY/VI PHẠM';
+            const isQuizDone = subStatus.quiz && subStatus.quiz !== '';
+            const isPracDone = subStatus.prac_file && subStatus.prac_file !== '';
+            const isCompleted = isQuizDone && isPracDone;
+            const isViolated = subStatus.quiz === 'HỦY/VI PHẠM' || subStatus.prac_file === 'HỦY BỎ';
 
             return (
               <motion.div
@@ -129,7 +131,7 @@ export default function DashboardPage({ sbd, onLogout }: DashboardPageProps) {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: index * 0.1 }}
                 onClick={() => !isCompleted && !isViolated && navigate(`/exam/${sub.id}`)}
-                className={`group relative bg-white p-8 rounded-3xl shadow-sm border border-slate-200 hover:shadow-xl hover:border-indigo-200 transition-all cursor-pointer ${isCompleted || isViolated ? 'opacity-75' : ''}`}
+                className={`group relative bg-white p-8 rounded-3xl shadow-sm border border-slate-200 hover:shadow-xl hover:border-indigo-200 transition-all cursor-pointer ${isCompleted || isViolated ? 'opacity-75 grayscale' : ''}`}
               >
                 <div className={`w-16 h-16 ${sub.bg} rounded-2xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform`}>
                   <sub.icon className={`w-8 h-8 ${sub.color}`} />
