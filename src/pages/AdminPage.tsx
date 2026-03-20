@@ -16,6 +16,8 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
+import { toast } from 'react-hot-toast';
+
 interface Result {
   id: number;
   sbd: string;
@@ -81,14 +83,14 @@ export default function AdminPage() {
     if (!confirm('CẢNH BÁO: Xóa TOÀN BỘ kết quả thi? Hành động này không thể hoàn tác.')) return;
     await fetch('/api/admin/reset_results', { method: 'POST' });
     fetchData();
-    alert('Đã xóa sạch kết quả thi.');
+    toast.success('Đã xóa sạch kết quả thi.');
   };
 
   const handleResetAll = async () => {
     if (!confirm('CẢNH BÁO NGUY HIỂM: Xóa TOÀN BỘ thí sinh và kết quả?')) return;
     await fetch('/api/admin/reset_all', { method: 'POST' });
     fetchData();
-    alert('Hệ thống đã được làm mới hoàn toàn.');
+    toast.success('Hệ thống đã được làm mới hoàn toàn.');
   };
 
   const [isAddingStudent, setIsAddingStudent] = useState(false);
@@ -721,7 +723,7 @@ function PracConfigCard({ subject, icon: Icon, color }: { subject: string, icon:
         body: formData
       });
     }
-    alert(`Đã lưu cấu hình ${subject}`);
+    toast.success(`Đã lưu cấu hình ${subject}`);
   };
 
   const colors: any = {

@@ -17,6 +17,8 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 import CameraMonitor from '../components/CameraMonitor';
 
+import { toast } from 'react-hot-toast';
+
 interface Question {
   id: number;
   q: string;
@@ -54,7 +56,7 @@ export default function ExamPage({ sbd }: { sbd: string }) {
   useEffect(() => {
     if (mode === 'quiz') {
       if (examStatus[subject || '']?.quiz) {
-        alert('Bạn đã hoàn thành phần thi trắc nghiệm này!');
+      toast.error('Bạn đã hoàn thành phần thi trắc nghiệm này!');
         setMode('selection');
         return;
       }
@@ -62,7 +64,7 @@ export default function ExamPage({ sbd }: { sbd: string }) {
       setTimeLeft(15 * 60); // 15 minutes
     } else if (mode === 'prac') {
       if (examStatus[subject || '']?.prac_file) {
-        alert('Bạn đã hoàn thành phần thi tự luận này!');
+      toast.error('Bạn đã hoàn thành phần thi tự luận này!');
         setMode('selection');
         return;
       }
@@ -125,11 +127,11 @@ export default function ExamPage({ sbd }: { sbd: string }) {
   const handleStart = (newMode: 'quiz' | 'prac') => {
     const currentSub = subject || '';
     if (newMode === 'quiz' && examStatus[currentSub]?.quiz) {
-      alert('Bạn đã hoàn thành phần thi trắc nghiệm này!');
+      toast.error('Bạn đã hoàn thành phần thi trắc nghiệm này!');
       return;
     }
     if (newMode === 'prac' && examStatus[currentSub]?.prac_file) {
-      alert('Bạn đã hoàn thành phần thi tự luận này!');
+      toast.error('Bạn đã hoàn thành phần thi tự luận này!');
       return;
     }
     setMode(newMode);
@@ -174,11 +176,11 @@ export default function ExamPage({ sbd }: { sbd: string }) {
         });
         const data = await res.json();
         if (status === 'violated') {
-          alert('BẠN ĐÃ VI PHẠM 3 LẦN. BÀI THI ĐÃ BỊ ĐÌNH CHỈ.');
+        toast.error('BẠN ĐÃ VI PHẠM 3 LẦN. BÀI THI ĐÃ BỊ ĐÌNH CHỈ.');
         } else if (status === 'canceled') {
           console.log('Đã ghi nhận hủy bài thi trắc nghiệm trên server.');
         } else {
-          alert(`Nộp bài thành công! Điểm trắc nghiệm: ${data.score}`);
+          toast.success(`Nộp bài thành công! Điểm trắc nghiệm: ${data.score}`);
         }
       } else if (submitMode === 'prac') {
         const formData = new FormData();
@@ -199,7 +201,7 @@ export default function ExamPage({ sbd }: { sbd: string }) {
           if (status === 'canceled') {
             console.log('Đã ghi nhận hủy bài thi tự luận trên server.');
           } else {
-            alert('Đã nộp bài tự luận thành công!');
+            toast.success('Đã nộp bài tự luận thành công!');
           }
         } else {
           throw new Error(data.error || 'Server error');
@@ -212,7 +214,7 @@ export default function ExamPage({ sbd }: { sbd: string }) {
     } catch (error) {
       console.error('Error submitting:', error);
       if (status !== 'canceled') {
-        alert('Có lỗi xảy ra khi nộp bài. Vui lòng thử lại.');
+        toast.error('Có lỗi xảy ra khi nộp bài. Vui lòng thử lại.');
       }
     } finally {
       setIsSubmitting(false);

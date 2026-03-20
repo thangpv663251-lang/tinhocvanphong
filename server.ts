@@ -2,7 +2,7 @@ import express from 'express';
 import { createServer as createViteServer } from 'vite';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import sqlite3 from 'sqlite3';
+import Database from 'better-sqlite3';
 import multer from 'multer';
 import fs from 'fs';
 import cors from 'cors';
@@ -18,54 +18,53 @@ const DB_PATH = path.join(__dirname, 'exam_data.db');
 if (!fs.existsSync(UPLOAD_FOLDER)) fs.mkdirSync(UPLOAD_FOLDER, { recursive: true });
 if (!fs.existsSync(PRAC_FILES)) fs.mkdirSync(PRAC_FILES, { recursive: true });
 
-const db = new sqlite3.Database(DB_PATH);
+const db = new Database(DB_PATH);
 
-db.serialize(() => {
-  db.run(`CREATE TABLE IF NOT EXISTS students (
-    sbd TEXT PRIMARY KEY,
-    password TEXT,
-    fullname TEXT,
-    dob TEXT,
-    pob TEXT,
-    course TEXT,
-    phone TEXT
-  )`);
+// Initialize tables
+db.exec(`CREATE TABLE IF NOT EXISTS students (
+  sbd TEXT PRIMARY KEY,
+  password TEXT,
+  fullname TEXT,
+  dob TEXT,
+  pob TEXT,
+  course TEXT,
+  phone TEXT
+)`);
 
-  db.run(`CREATE TABLE IF NOT EXISTS results (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    sbd TEXT,
-    subject TEXT,
-    quiz_score TEXT,
-    prac_score TEXT,
-    prac_file TEXT,
-    time_submit TEXT,
-    violations INTEGER DEFAULT 0
-  )`);
+db.exec(`CREATE TABLE IF NOT EXISTS results (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  sbd TEXT,
+  subject TEXT,
+  quiz_score TEXT,
+  prac_score TEXT,
+  prac_file TEXT,
+  time_submit TEXT,
+  violations INTEGER DEFAULT 0
+)`);
 
-  db.run(`CREATE TABLE IF NOT EXISTS quiz_questions (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    subject TEXT,
-    question TEXT,
-    opt_a TEXT,
-    opt_b TEXT,
-    opt_c TEXT,
-    answer TEXT
-  )`);
+db.exec(`CREATE TABLE IF NOT EXISTS quiz_questions (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  subject TEXT,
+  question TEXT,
+  opt_a TEXT,
+  opt_b TEXT,
+  opt_c TEXT,
+  answer TEXT
+)`);
 
-  db.run(`CREATE TABLE IF NOT EXISTS prac_questions (
-    subject TEXT PRIMARY KEY,
-    title TEXT,
-    content TEXT,
-    file_name TEXT,
-    quiz_point REAL
-  )`);
+db.exec(`CREATE TABLE IF NOT EXISTS prac_questions (
+  subject TEXT PRIMARY KEY,
+  title TEXT,
+  content TEXT,
+  file_name TEXT,
+  quiz_point REAL
+)`);
 
-  // Initialize default subjects
-  const subjects = ["Word", "Excel", "PowerPoint"];
-  subjects.forEach(sub => {
-    db.run("INSERT OR IGNORE INTO prac_questions (subject, title, content, file_name, quiz_point) VALUES (?, ?, ?, ?, ?)",
-      [sub, `Đề thi ${sub}`, "Nội dung chưa cập nhật", "", 0.5]);
-  });
+// Initialize default subjects
+const subjects = ["Word", "Excel", "PowerPoint"];
+const insertSubject = db.prepare("INSERT OR IGNORE INTO prac_questions (subject, title, content, file_name, quiz_point) VALUES (?, ?, ?, ?, ?)");
+subjects.forEach(sub => {
+  insertSubject.run(sub, `Đề thi ${sub}`, "Nội dung chưa cập nhật", "", 0.5);
 });
 
 const storage = multer.diskStorage({
@@ -102,20 +101,24 @@ async function startServer() {
   // Student Auth & Info
   app.post('/api/login', (req, res) => {
     const { sbd, password } = req.body;
-    db.get("SELECT * FROM students WHERE sbd = ? AND password = ?", [sbd, password], (err, row) => {
-      if (err) return res.status(500).json({ error: err.message });
+    try {
+      const row = db.prepare("SELECT * FROM students WHERE sbd = ? AND password = ?").get(sbd, password);
       if (row) res.json({ status: "success", student: row });
       else res.status(401).json({ error: "Sai số báo danh hoặc mật khẩu" });
-    });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
   });
 
   app.get('/api/student/:sbd', (req, res) => {
     const { sbd } = req.params;
-    db.get("SELECT * FROM students WHERE sbd = ?", [sbd], (err, row) => {
-      if (err) return res.status(500).json({ error: err.message });
+    try {
+      const row = db.prepare("SELECT * FROM students WHERE sbd = ?").get(sbd);
       if (row) res.json(row);
       else res.status(404).json({ error: "Không tìm thấy thí sinh" });
-    });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
   });
 
   // API Routes
@@ -123,31 +126,37 @@ async function startServer() {
     const { sbd } = req.body;
     if (!sbd) return res.json({});
     const sbdUpper = String(sbd).toUpperCase().trim();
-    db.all("SELECT subject, quiz_score, prac_score, prac_file FROM results WHERE sbd = ?", [sbdUpper], (err, rows) => {
-      if (err) return res.status(500).json({ error: err.message });
+    try {
+      const rows = db.prepare("SELECT subject, quiz_score, prac_score, prac_file FROM results WHERE sbd = ?").all(sbdUpper);
       const status: any = {};
       rows.forEach((r: any) => {
         status[r.subject] = { quiz: r.quiz_score, prac: r.prac_score, prac_file: r.prac_file };
       });
       res.json(status);
-    });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
   });
 
   app.get('/api/get_questions/:subject', (req, res) => {
     const { subject } = req.params;
-    db.all("SELECT id, question, opt_a, opt_b, opt_c FROM quiz_questions WHERE subject = ?", [subject], (err, rows) => {
-      if (err) return res.status(500).json({ error: err.message });
+    try {
+      const rows = db.prepare("SELECT id, question, opt_a, opt_b, opt_c FROM quiz_questions WHERE subject = ?").all(subject);
       res.json(rows.map((r: any) => ({ id: r.id, q: r.question, opts: [r.opt_a, r.opt_b, r.opt_c] })));
-    });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
   });
 
   app.get('/api/get_prac_content/:subject', (req, res) => {
     const { subject } = req.params;
-    db.get("SELECT title, content, file_name FROM prac_questions WHERE subject = ?", [subject], (err, row: any) => {
-      if (err) return res.status(500).json({ error: err.message });
+    try {
+      const row: any = db.prepare("SELECT title, content, file_name FROM prac_questions WHERE subject = ?").get(subject);
       if (row) res.json({ title: row.title, content: row.content, file: row.file_name });
       else res.status(404).json({ error: "Not found" });
-    });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
   });
 
   app.post('/api/submit_quiz', (req, res) => {
@@ -156,37 +165,40 @@ async function startServer() {
     const timeNow = new Date().toLocaleString('vi-VN');
     const vilo = parseInt(violations || 0);
 
-    if (status === 'canceled' || vilo >= 3) {
-      const quizRes = "HỦY/VI PHẠM";
-      db.get("SELECT id FROM results WHERE sbd = ? AND subject = ?", [sbdUpper, subject], (err, row: any) => {
+    try {
+      if (status === 'canceled' || vilo >= 3) {
+        const quizRes = "HỦY/VI PHẠM";
+        const row: any = db.prepare("SELECT id FROM results WHERE sbd = ? AND subject = ?").get(sbdUpper, subject);
         if (row) {
-          db.run("UPDATE results SET quiz_score = ?, violations = ? WHERE id = ?", [quizRes, vilo, row.id], () => res.json({ status: "success", score: quizRes }));
+          db.prepare("UPDATE results SET quiz_score = ?, violations = ? WHERE id = ?").run(quizRes, vilo, row.id);
         } else {
-          db.run("INSERT INTO results (sbd, subject, quiz_score, prac_score, prac_file, time_submit, violations) VALUES (?,?,?,?,?,?,?)",
-            [sbdUpper, subject, quizRes, "", "", timeNow, vilo], () => res.json({ status: "success", score: quizRes }));
+          db.prepare("INSERT INTO results (sbd, subject, quiz_score, prac_score, prac_file, time_submit, violations) VALUES (?,?,?,?,?,?,?)")
+            .run(sbdUpper, subject, quizRes, "", "", timeNow, vilo);
         }
-      });
-    } else {
-      db.get("SELECT quiz_point FROM prac_questions WHERE subject = ?", [subject], (err, pracRow: any) => {
+        res.json({ status: "success", score: quizRes });
+      } else {
+        const pracRow: any = db.prepare("SELECT quiz_point FROM prac_questions WHERE subject = ?").get(subject);
         const pt = pracRow?.quiz_point || 0.5;
-        db.all("SELECT id, answer FROM quiz_questions WHERE subject = ?", [subject], (err, dbQs) => {
-          let score = 0;
-          dbQs.forEach((q: any) => {
-            if (String(answers[q.id]) === String(q.answer)) score++;
-          });
-          const penalty = 1 - (vilo * 0.3);
-          const quizRes = (score * pt * Math.max(0, penalty)).toFixed(2);
-
-          db.get("SELECT id FROM results WHERE sbd = ? AND subject = ?", [sbdUpper, subject], (err, row: any) => {
-            if (row) {
-              db.run("UPDATE results SET quiz_score = ?, violations = ? WHERE id = ?", [quizRes, vilo, row.id], () => res.json({ status: "success", score: quizRes }));
-            } else {
-              db.run("INSERT INTO results (sbd, subject, quiz_score, prac_score, prac_file, time_submit, violations) VALUES (?,?,?,?,?,?,?)",
-                [sbdUpper, subject, quizRes, "", "", timeNow, vilo], () => res.json({ status: "success", score: quizRes }));
-            }
-          });
+        const dbQs = db.prepare("SELECT id, answer FROM quiz_questions WHERE subject = ?").all(subject);
+        
+        let score = 0;
+        dbQs.forEach((q: any) => {
+          if (String(answers[q.id]) === String(q.answer)) score++;
         });
-      });
+        const penalty = 1 - (vilo * 0.3);
+        const quizRes = (score * pt * Math.max(0, penalty)).toFixed(2);
+
+        const row: any = db.prepare("SELECT id FROM results WHERE sbd = ? AND subject = ?").get(sbdUpper, subject);
+        if (row) {
+          db.prepare("UPDATE results SET quiz_score = ?, violations = ? WHERE id = ?").run(quizRes, vilo, row.id);
+        } else {
+          db.prepare("INSERT INTO results (sbd, subject, quiz_score, prac_score, prac_file, time_submit, violations) VALUES (?,?,?,?,?,?,?)")
+            .run(sbdUpper, subject, quizRes, "", "", timeNow, vilo);
+        }
+        res.json({ status: "success", score: quizRes });
+      }
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
     }
   });
 
@@ -209,82 +221,82 @@ async function startServer() {
 
     const timeNow = new Date().toLocaleString('vi-VN');
 
-    db.get("SELECT id FROM results WHERE sbd = ? AND subject = ?", [sbdUpper, sub], (err, row: any) => {
-      if (err) {
-        console.error("[Practical Submission] DB Get Error:", err.message);
-        return res.status(500).json({ error: err.message });
-      }
-      
+    try {
+      const row: any = db.prepare("SELECT id FROM results WHERE sbd = ? AND subject = ?").get(sbdUpper, sub);
       if (row) {
-        db.run("UPDATE results SET prac_file = ?, time_submit = ? WHERE id = ?", [fname, timeNow, row.id], (err) => {
-          if (err) {
-            console.error("[Practical Submission] DB Update Error:", err.message);
-            return res.status(500).json({ error: err.message });
-          }
-          res.json({ status: "success", filename: fname });
-        });
+        db.prepare("UPDATE results SET prac_file = ?, time_submit = ? WHERE id = ?").run(fname, timeNow, row.id);
       } else {
-        db.run("INSERT INTO results (sbd, subject, quiz_score, prac_score, prac_file, time_submit) VALUES (?,?,?,?,?,?)",
-          [sbdUpper, sub, "", "", fname, timeNow], (err) => {
-            if (err) {
-              console.error("[Practical Submission] DB Insert Error:", err.message);
-              return res.status(500).json({ error: err.message });
-            }
-            res.json({ status: "success", filename: fname });
-          });
+        db.prepare("INSERT INTO results (sbd, subject, quiz_score, prac_score, prac_file, time_submit) VALUES (?,?,?,?,?,?)")
+          .run(sbdUpper, sub, "", "", fname, timeNow);
       }
-    });
+      res.json({ status: "success", filename: fname });
+    } catch (err: any) {
+      console.error("[Practical Submission] DB Error:", err.message);
+      res.status(500).json({ error: err.message });
+    }
   });
 
   // Admin Routes
   app.get('/api/admin/students', (req, res) => {
-    db.all("SELECT * FROM students ORDER BY sbd ASC", (err, rows) => {
-      if (err) return res.status(500).json({ error: err.message });
+    try {
+      const rows = db.prepare("SELECT * FROM students ORDER BY sbd ASC").all();
       res.json(rows);
-    });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
   });
 
   app.post('/api/admin/add_student', (req, res) => {
     const { fullname, dob, pob, course, phone } = req.body;
     const sbd = phone; // SBD is phone number
     const password = phone; // Password is phone number
-    db.run("INSERT INTO students (sbd, password, fullname, dob, pob, course, phone) VALUES (?,?,?,?,?,?,?)",
-      [sbd, password, fullname, dob, pob, course, phone], (err) => {
-        if (err) return res.status(500).json({ error: err.message });
-        res.json({ status: "success" });
-      });
+    try {
+      db.prepare("INSERT INTO students (sbd, password, fullname, dob, pob, course, phone) VALUES (?,?,?,?,?,?,?)")
+        .run(sbd, password, fullname, dob, pob, course, phone);
+      res.json({ status: "success" });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
   });
 
   app.delete('/api/admin/del_student/:sbd', (req, res) => {
-    db.run("DELETE FROM students WHERE sbd = ?", [req.params.sbd], (err) => {
-      if (err) return res.status(500).json({ error: err.message });
+    try {
+      db.prepare("DELETE FROM students WHERE sbd = ?").run(req.params.sbd);
       res.json({ status: "success" });
-    });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
   });
 
   app.get('/api/admin/results', (req, res) => {
-    db.all("SELECT * FROM results ORDER BY id DESC", (err, rows) => {
-      if (err) return res.status(500).json({ error: err.message });
+    try {
+      const rows = db.prepare("SELECT * FROM results ORDER BY id DESC").all();
       res.json(rows);
-    });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
   });
 
   app.post('/api/admin/update_prac', (req, res) => {
     const { subject, title, content, quiz_point } = req.body;
-    db.run("UPDATE prac_questions SET title = ?, content = ?, quiz_point = ? WHERE subject = ?",
-      [title, content, quiz_point, subject], (err) => {
-        if (err) return res.status(500).json({ error: err.message });
-        res.json({ status: "success" });
-      });
+    try {
+      db.prepare("UPDATE prac_questions SET title = ?, content = ?, quiz_point = ? WHERE subject = ?")
+        .run(title, content, quiz_point, subject);
+      res.json({ status: "success" });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
   });
 
   app.post('/api/admin/upload_prac_task', uploadPrac.single('file'), (req, res) => {
     const { subject } = req.body;
     if ((req as any).file) {
-      db.run("UPDATE prac_questions SET file_name = ? WHERE subject = ?", [(req as any).file.filename, subject], (err) => {
-        if (err) return res.status(500).json({ error: err.message });
+      try {
+        db.prepare("UPDATE prac_questions SET file_name = ? WHERE subject = ?").run((req as any).file.filename, subject);
         res.json({ status: "success", filename: (req as any).file?.filename });
-      });
+      } catch (err: any) {
+        res.status(500).json({ error: err.message });
+      }
     } else {
       res.status(400).json({ error: "No file uploaded" });
     }
@@ -292,55 +304,72 @@ async function startServer() {
 
   app.post('/api/admin/add_quiz', (req, res) => {
     const { subject, question, opt_a, opt_b, opt_c, answer } = req.body;
-    db.run("INSERT INTO quiz_questions (subject, question, opt_a, opt_b, opt_c, answer) VALUES (?,?,?,?,?,?)",
-      [subject, question, opt_a, opt_b, opt_c, answer], (err) => {
-        if (err) return res.status(500).json({ error: err.message });
-        res.json({ status: "success" });
-      });
+    try {
+      db.prepare("INSERT INTO quiz_questions (subject, question, opt_a, opt_b, opt_c, answer) VALUES (?,?,?,?,?,?)")
+        .run(subject, question, opt_a, opt_b, opt_c, answer);
+      res.json({ status: "success" });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
   });
 
   app.get('/api/admin/get_all_quizzes', (req, res) => {
-    db.all("SELECT * FROM quiz_questions", (err, rows) => {
-      if (err) return res.status(500).json({ error: err.message });
+    try {
+      const rows = db.prepare("SELECT * FROM quiz_questions").all();
       res.json(rows);
-    });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
   });
 
   app.delete('/api/admin/del_quiz/:id', (req, res) => {
-    db.run("DELETE FROM quiz_questions WHERE id = ?", [req.params.id], (err) => {
-      if (err) return res.status(500).json({ error: err.message });
+    try {
+      db.prepare("DELETE FROM quiz_questions WHERE id = ?").run(req.params.id);
       res.json({ status: "success" });
-    });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
   });
 
   app.post('/api/admin/update_score', (req, res) => {
     const { id, score } = req.body;
-    db.run("UPDATE results SET prac_score = ? WHERE id = ?", [score, id], (err) => {
-      if (err) return res.status(500).json({ error: err.message });
+    try {
+      db.prepare("UPDATE results SET prac_score = ? WHERE id = ?").run(score, id);
       res.json({ status: "success" });
-    });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
   });
 
   app.delete('/api/admin/delete_result/:id', (req, res) => {
-    db.run("DELETE FROM results WHERE id = ?", [req.params.id], (err) => {
-      if (err) return res.status(500).json({ error: err.message });
+    try {
+      db.prepare("DELETE FROM results WHERE id = ?").run(req.params.id);
       res.json({ status: "success" });
-    });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
   });
 
   app.post('/api/admin/reset_results', (req, res) => {
-    db.run("DELETE FROM results", (err) => {
-      if (err) return res.status(500).json({ error: err.message });
+    try {
+      db.prepare("DELETE FROM results").run();
       res.json({ status: "success" });
-    });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
   });
 
   app.post('/api/admin/reset_all', (req, res) => {
-    db.serialize(() => {
-      db.run("DELETE FROM results");
-      db.run("DELETE FROM students");
+    try {
+      const reset = db.transaction(() => {
+        db.prepare("DELETE FROM results").run();
+        db.prepare("DELETE FROM students").run();
+      });
+      reset();
       res.json({ status: "success" });
-    });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
   });
 
   app.get('/api/download/:f', (req, res) => res.download(path.join(UPLOAD_FOLDER, req.params.f)));
